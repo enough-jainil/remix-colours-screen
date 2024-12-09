@@ -93,39 +93,53 @@ export default function ColorScreensaver() {
   const takeScreenshot = async () => {
     if (!color) return;
 
-    await loadRighteousFont();
+    try {
+      await loadRighteousFont();
+      await document.fonts.ready;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = 1920;
-    canvas.height = 1080;
+      const canvas = document.createElement("canvas");
+      // Use smaller dimensions for mobile devices
+      const isMobile = window.innerWidth < 768;
+      canvas.width = isMobile ? 1080 : 1920;
+      canvas.height = isMobile ? 1080 : 1080;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    ctx.fillStyle = color.hex.value;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Draw background
+      ctx.fillStyle = color.hex.value;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    await document.fonts.ready;
+      // Configure text
+      ctx.fillStyle = isLightColor(color) ? "#000000" : "#FFFFFF";
+      ctx.font = isMobile ? "36px Righteous" : "48px Righteous";
+      ctx.textAlign = "center";
 
-    ctx.fillStyle = isLightColor(color) ? "#000000" : "#FFFFFF";
-    ctx.font = "48px Righteous";
-    ctx.textAlign = "center";
-    ctx.fillText(color.name.value, canvas.width / 2, canvas.height / 2 - 50);
-    ctx.fillText(
-      `HEX: ${color.hex.value}`,
-      canvas.width / 2,
-      canvas.height / 2 + 50
-    );
-    ctx.fillText(
-      `RGB: ${color.rgb.value}`,
-      canvas.width / 2,
-      canvas.height / 2 + 150
-    );
+      // Draw text
+      const centerY = canvas.height / 2;
+      ctx.fillText(color.name.value, canvas.width / 2, centerY - 50);
+      ctx.fillText(`HEX: ${color.hex.value}`, canvas.width / 2, centerY + 50);
+      ctx.fillText(`RGB: ${color.rgb.value}`, canvas.width / 2, centerY + 150);
 
-    const link = document.createElement("a");
-    link.download = `color-${color.hex.clean}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+      // Create and trigger download
+      const link = document.createElement("a");
+      link.download = `color-${color.hex.clean}.png`;
+      link.href = canvas.toDataURL("image/png");
+
+      // For mobile Safari compatibility
+      if (navigator.userAgent.match(/(iPhone|iPad|iPod)/i)) {
+        const img = new Image();
+        img.src = link.href;
+        const w = window.open("");
+        if (w) {
+          w.document.write(img.outerHTML);
+        }
+      } else {
+        link.click();
+      }
+    } catch (error) {
+      console.error("Error taking screenshot:", error);
+    }
   };
 
   const handleColorSelect = (selectedColor: ColorResponse) => {
@@ -222,7 +236,7 @@ export default function ColorScreensaver() {
             </Button>
             <Button
               onClick={toggleFullscreen}
-              className={`${buttonColorClass} text-xs sm:text-sm`}
+              className={`${buttonColorClass} text-xs sm:text-sm hidden sm:inline-flex`}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
               {isFullscreen ? (
