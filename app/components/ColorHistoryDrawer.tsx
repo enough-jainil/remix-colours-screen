@@ -37,8 +37,7 @@ export function ColorHistoryDrawer({
     <Sheet>
       <SheetTrigger asChild>
         <Button
-          className={`${buttonColorClass} text-xs sm:text-sm`}
-          size="sm"
+          className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
           aria-label="View color history"
         >
           <History className="h-3 w-3 sm:h-4 sm:w-4" />

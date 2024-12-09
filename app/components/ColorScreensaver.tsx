@@ -224,7 +224,7 @@ export default function ColorScreensaver() {
           <div className="flex flex-wrap justify-center gap-2">
             <Button
               onClick={togglePlayPause}
-              className={`${buttonColorClass} text-xs sm:text-sm`}
+              className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
               aria-label={isPlaying ? "Pause screensaver" : "Play screensaver"}
             >
               {isPlaying ? (
@@ -236,7 +236,7 @@ export default function ColorScreensaver() {
             </Button>
             <Button
               onClick={toggleFullscreen}
-              className={`${buttonColorClass} text-xs sm:text-sm hidden sm:inline-flex`}
+              className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9 hidden sm:inline-flex`}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
               {isFullscreen ? (
@@ -248,7 +248,7 @@ export default function ColorScreensaver() {
             </Button>
             <Button
               onClick={takeScreenshot}
-              className={`${buttonColorClass} text-xs sm:text-sm`}
+              className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
               aria-label="Take screenshot"
             >
               <Camera className="h-3 w-3 sm:h-4 sm:w-4" />
