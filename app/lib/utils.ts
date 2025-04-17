@@ -128,6 +128,11 @@ export function addHslToColor(color: ColorResponse): ColorResponse {
   };
 }
 
+// Helper to validate HEX color format
+export function isValidHexColor(hex: string): boolean {
+  return /^#[0-9A-F]{6}$/i.test(hex);
+}
+
 // Determine the base color category from HSL
 export function getBaseColor(hsl: { h: number; s: number; l: number }): string {
   const { h, s, l } = hsl;

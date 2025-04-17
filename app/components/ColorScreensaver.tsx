@@ -22,6 +22,7 @@ import {
   isLightColor,
   copyToClipboard,
   addHslToColor,
+  isValidHexColor,
 } from "~/lib/utils";
 import { ColorHistoryDrawer } from "./ColorHistoryDrawer";
 import type { ColorResponse } from "~/lib/types";
@@ -53,7 +54,14 @@ export default function ColorScreensaver() {
     g: 255,
     b: 255,
   });
+  const [isCustomHexValid, setIsCustomHexValid] = useState(true);
   const hexInputRef = useRef<HTMLInputElement>(null);
+
+  const clearError = () => {
+    if (error) {
+      setTimeout(() => setError(null), 3000);
+    }
+  };
 
   const fetchRandomColor = useCallback(async () => {
     const r = Math.floor(Math.random() * 255);
@@ -70,9 +78,13 @@ export default function ColorScreensaver() {
       }
 
       const data = await response.json();
+      setError(null);
       return data;
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error("Error fetching color:", error);
+      setError(`Failed to fetch color: ${error.message}. Using fallback.`);
+      clearError();
       // Return a fallback color to prevent app from crashing
       return {
         name: { value: "Fallback Color" },
@@ -108,14 +120,32 @@ export default function ColorScreensaver() {
 
   useEffect(() => {
     const initializeColors = async () => {
-      const initialColor = await fetchRandomColor();
-      const initialNextColor = await fetchRandomColor();
-      // Add HSL values to the initial color
-      const enhancedInitialColor = addHslToColor(initialColor);
-      setColor(enhancedInitialColor);
-      setNextColor(initialNextColor);
-      setNextBgColor(enhancedInitialColor.hex.value);
-      setLoading(false);
+      try {
+        setLoading(true);
+        setError(null);
+        const initialColor = await fetchRandomColor();
+        const initialNextColor = await fetchRandomColor();
+
+        if (!initialColor || !initialNextColor) {
+          // Check if fetchRandomColor returned fallback due to error
+          // Error state is already set inside fetchRandomColor
+          setLoading(false);
+          return; // Prevent further execution if colors couldn't be fetched
+        }
+
+        // Add HSL values to the initial color
+        const enhancedInitialColor = addHslToColor(initialColor);
+        setColor(enhancedInitialColor);
+        setNextColor(initialNextColor);
+        setNextBgColor(enhancedInitialColor.hex.value);
+        setLoading(false);
+      } catch (err) {
+        const error = err as Error;
+        console.error("Error initializing colors:", error);
+        setError(`Initialization failed: ${error.message}`);
+        setLoading(false);
+        clearError();
+      }
     };
 
     initializeColors();
@@ -170,10 +200,18 @@ export default function ColorScreensaver() {
 
   const takeScreenshot = async () => {
     if (!color) return;
+    setError(null);
 
     try {
-      await loadRighteousFont();
-      await document.fonts.ready;
+      try {
+        await loadRighteousFont();
+        await document.fonts.ready;
+      } catch (fontError) {
+        console.error("Error loading font:", fontError);
+        setError("Failed to load font for screenshot.");
+        clearError();
+        // Optionally continue without the font, or return
+      }
 
       const canvas = document.createElement("canvas");
       // Use smaller dimensions for mobile devices
@@ -184,6 +222,8 @@ export default function ColorScreensaver() {
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         console.error("Could not get canvas context");
+        setError("Failed to create screenshot: Cannot get canvas context.");
+        clearError();
         return;
       }
 
@@ -217,36 +257,56 @@ export default function ColorScreensaver() {
         setTimeout(() => {
           document.body.removeChild(link);
         }, 100);
-      } catch (err) {
-        console.error("Error creating screenshot:", err);
-        // Fallback for browsers that restrict toDataURL
-        const blob = await new Promise<Blob | null>((resolve) => {
-          try {
-            canvas.toBlob(resolve, "image/png");
-          } catch (e) {
-            console.error("Canvas toBlob error:", e);
-            resolve(null);
-          }
-        });
+      } catch (downloadError) {
+        console.error("Error creating screenshot data URL:", downloadError);
+        setError("Failed to generate screenshot image (Data URL).");
+        clearError();
 
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const win = window.open();
-          if (win) {
-            win.document.write(`<img src="${url}" alt="Color Screenshot"/>`);
-            // Clean up
-            win.onload = () => URL.revokeObjectURL(url);
+        // Fallback for browsers that restrict toDataURL
+        try {
+          const blob = await new Promise<Blob | null>((resolve, reject) => {
+            // Wrap canvas.toBlob in try-catch inside the promise
+            try {
+              canvas.toBlob((blobResult) => {
+                if (blobResult) {
+                  resolve(blobResult);
+                } else {
+                  // Reject if toBlob returns null without throwing an error
+                  reject(new Error("Canvas toBlob returned null."));
+                }
+              }, "image/png");
+            } catch (e) {
+              console.error("Canvas toBlob error:", e);
+              reject(e); // Reject the promise if toBlob throws
+            }
+          });
+
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const win = window.open();
+            if (win) {
+              win.document.write(`<img src="${url}" alt="Color Screenshot"/>`);
+              win.onload = () => URL.revokeObjectURL(url); // Clean up after image loads in popup
+            } else {
+              URL.revokeObjectURL(url); // Clean up if popup fails
+              setError("Failed to open screenshot: Please allow pop-ups.");
+              clearError();
+            }
           } else {
-            URL.revokeObjectURL(url);
-            alert("Please allow pop-ups to view your screenshot");
+            // This case might be hit if resolve(null) was called or promise rejected
+            setError("Failed to generate screenshot image (Blob).");
+            clearError();
           }
+        } catch (blobError) {
+          console.error("Error creating screenshot blob:", blobError);
+          setError("Failed to generate screenshot image (Blob fallback).");
+          clearError();
         }
       }
-    } catch (error) {
-      console.error("Error taking screenshot:", error);
-      setError("Failed to create screenshot. Try again later.");
-      // Clear error after 3 seconds
-      setTimeout(() => setError(null), 3000);
+    } catch (generalError) {
+      console.error("Error taking screenshot:", generalError);
+      setError("An unexpected error occurred while taking the screenshot.");
+      clearError();
     }
   };
 
@@ -321,6 +381,7 @@ export default function ColorScreensaver() {
       });
     }
     setShowCustomColorInput((prev) => !prev);
+    setIsCustomHexValid(true);
 
     // Focus the hex input when opening
     if (!showCustomColorInput) {
@@ -333,48 +394,51 @@ export default function ColorScreensaver() {
   };
 
   const handleHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.toUpperCase();
     setCustomHexInput(value);
 
+    const isValid = isValidHexColor(value);
+    setIsCustomHexValid(isValid);
+
     // Convert valid hex to RGB
-    if (/^#[0-9A-F]{6}$/i.test(value)) {
+    if (isValid) {
       const r = parseInt(value.slice(1, 3), 16);
       const g = parseInt(value.slice(3, 5), 16);
       const b = parseInt(value.slice(5, 7), 16);
       setCustomRgbInput({ r, g, b });
+      setError(null);
+    } else {
+      setError("Invalid HEX format. Use #RRGGBB.");
     }
   };
 
   const handleRgbInputChange = (component: "r" | "g" | "b", value: number) => {
-    const newRgb = { ...customRgbInput, [component]: value };
+    // Ensure value is within bounds
+    const clampedValue = Math.max(0, Math.min(255, value));
+    const newRgb = { ...customRgbInput, [component]: clampedValue };
     setCustomRgbInput(newRgb);
 
     // Convert RGB to hex
     const hexValue = `#${newRgb.r.toString(16).padStart(2, "0")}${newRgb.g
       .toString(16)
       .padStart(2, "0")}${newRgb.b.toString(16).padStart(2, "0")}`;
-    setCustomHexInput(hexValue.toUpperCase());
+    const upperHex = hexValue.toUpperCase();
+    setCustomHexInput(upperHex);
+    setIsCustomHexValid(true);
+    setError(null);
   };
 
   const applyCustomColor = async () => {
+    setError(null);
+
+    // Verify hex is valid using the state
+    if (!isCustomHexValid || !isValidHexColor(customHexInput)) {
+      setError("Invalid hex color format. Please use #RRGGBB.");
+      clearError();
+      return;
+    }
+
     try {
-      // Verify hex is valid
-      if (!/^#[0-9A-F]{6}$/i.test(customHexInput)) {
-        throw new Error("Invalid hex color");
-      }
-
-      // Verify RGB values are valid
-      if (
-        customRgbInput.r < 0 ||
-        customRgbInput.r > 255 ||
-        customRgbInput.g < 0 ||
-        customRgbInput.g > 255 ||
-        customRgbInput.b < 0 ||
-        customRgbInput.b > 255
-      ) {
-        throw new Error("RGB values must be between 0 and 255");
-      }
-
       // Fetch color information from API
       const response = await fetch(
         `https://www.thecolorapi.com/id?hex=${customHexInput.replace("#", "")}`
@@ -404,16 +468,24 @@ export default function ColorScreensaver() {
 
       // Pause automatic color changes
       setIsPlaying(false);
-    } catch (error) {
+      setError(null);
+    } catch (err) {
+      const error = err as Error;
       console.error("Error applying custom color:", error);
-      setError("Failed to apply custom color. Please check your input.");
-      setTimeout(() => setError(null), 3000);
+      if (error.message.includes("API error")) {
+        setError(`Failed to get color details: ${error.message}.`);
+      } else {
+        setError(`Failed to apply custom color: ${error.message}`);
+      }
+      clearError();
     }
   };
 
   const handleColorPickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.toUpperCase();
     setCustomHexInput(value);
+    setIsCustomHexValid(true);
+    setError(null);
 
     // Convert hex to RGB
     const r = parseInt(value.slice(1, 3), 16);
@@ -433,8 +505,12 @@ export default function ColorScreensaver() {
   const isLight = isLightColor(color);
   const textColorClass = isLight ? "text-gray-900" : "text-white";
   const buttonColorClass = isLight
-    ? "bg-gray-900 text-white hover:bg-gray-700"
-    : "bg-white text-gray-900 hover:bg-gray-200";
+    ? "bg-gray-900/80 text-white hover:bg-gray-900/90"
+    : "bg-white/80 text-gray-900 hover:bg-white/90";
+  const inputBgClass = isLight
+    ? "border-gray-300 bg-white/80 text-gray-900 focus:bg-white"
+    : "border-gray-600 bg-black/50 text-white focus:bg-black/60";
+  const invalidInputClass = "!border-red-500 ring-1 ring-red-500";
   const patterns = [
     { id: "stripes", name: "Stripes" },
     { id: "dots", name: "Dots" },
@@ -567,15 +643,25 @@ export default function ColorScreensaver() {
                     type="text"
                     value={customHexInput}
                     onChange={handleHexInputChange}
-                    placeholder="#000000"
-                    className={`ml-2 flex-1 px-2 py-1 text-sm rounded border ${
-                      isLight
-                        ? "border-gray-300 bg-white text-gray-900"
-                        : "border-gray-700 bg-gray-800 text-white"
+                    placeholder="#RRGGBB"
+                    className={`ml-2 flex-1 px-2 py-1 text-sm rounded border ${inputBgClass} ${
+                      !isCustomHexValid ? invalidInputClass : ""
                     }`}
                     maxLength={7}
+                    aria-invalid={!isCustomHexValid}
+                    aria-describedby={
+                      !isCustomHexValid ? "hex-error" : undefined
+                    }
                   />
                 </div>
+                {!isCustomHexValid && (
+                  <p
+                    id="hex-error"
+                    className="text-xs text-red-500 text-right -mt-1"
+                  >
+                    Invalid format
+                  </p>
+                )}
 
                 {/* RGB Sliders */}
                 <div className="space-y-2">
@@ -593,9 +679,9 @@ export default function ColorScreensaver() {
                       max="255"
                       value={customRgbInput.r}
                       onChange={(e) =>
-                        handleRgbInputChange("r", parseInt(e.target.value))
+                        handleRgbInputChange("r", parseInt(e.target.value, 10))
                       }
-                      className="flex-1 h-2 accent-red-600"
+                      className={`flex-1 h-2 accent-red-600 cursor-pointer ${buttonColorClass}`}
                     />
                     <span
                       className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
@@ -617,9 +703,9 @@ export default function ColorScreensaver() {
                       max="255"
                       value={customRgbInput.g}
                       onChange={(e) =>
-                        handleRgbInputChange("g", parseInt(e.target.value))
+                        handleRgbInputChange("g", parseInt(e.target.value, 10))
                       }
-                      className="flex-1 h-2 accent-green-600"
+                      className={`flex-1 h-2 accent-green-600 cursor-pointer ${buttonColorClass}`}
                     />
                     <span
                       className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
@@ -641,9 +727,9 @@ export default function ColorScreensaver() {
                       max="255"
                       value={customRgbInput.b}
                       onChange={(e) =>
-                        handleRgbInputChange("b", parseInt(e.target.value))
+                        handleRgbInputChange("b", parseInt(e.target.value, 10))
                       }
-                      className="flex-1 h-2 accent-blue-600"
+                      className={`flex-1 h-2 accent-blue-600 cursor-pointer ${buttonColorClass}`}
                     />
                     <span
                       className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
@@ -656,7 +742,8 @@ export default function ColorScreensaver() {
                 {/* Apply Button */}
                 <Button
                   onClick={applyCustomColor}
-                  className={`${buttonColorClass} w-full mt-2 text-xs py-1 h-8`}
+                  className={`${buttonColorClass} w-full mt-4 text-xs py-1 h-8`}
+                  disabled={!isCustomHexValid}
                 >
                   Apply Color
                 </Button>
