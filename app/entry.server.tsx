@@ -85,7 +85,14 @@ function handleBotRequest(
       }
     );
 
-    setTimeout(abort, ABORT_DELAY);
+    // Set timeout but keep a reference so we can clear it if resolved/rejected
+    const timeoutId = setTimeout(abort, ABORT_DELAY);
+
+    // Clean up the timeout if promise resolves or rejects
+    Promise.resolve().then(() => {
+      // This executes after the promise is either resolved or rejected
+      clearTimeout(timeoutId);
+    });
   });
 }
 
@@ -135,6 +142,13 @@ function handleBrowserRequest(
       }
     );
 
-    setTimeout(abort, ABORT_DELAY);
+    // Set timeout but keep a reference so we can clear it if resolved/rejected
+    const timeoutId = setTimeout(abort, ABORT_DELAY);
+
+    // Clean up the timeout if promise resolves or rejects
+    Promise.resolve().then(() => {
+      // This executes after the promise is either resolved or rejected
+      clearTimeout(timeoutId);
+    });
   });
 }

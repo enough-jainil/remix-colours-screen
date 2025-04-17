@@ -34,6 +34,24 @@ export default function App() {
       </head>
       <body>
         <HydrationHandler />
+
+        {/* Fallback UI when JavaScript is disabled */}
+        <noscript>
+          <div className="min-h-screen flex items-center justify-center p-4 bg-gray-100 text-center">
+            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
+              <h1 className="text-2xl font-bold mb-4">JavaScript Required</h1>
+              <p className="mb-4">
+                This color screensaver application requires JavaScript to be
+                enabled in your browser.
+              </p>
+              <p>
+                Please enable JavaScript and reload the page to experience the
+                dynamic color changing screensaver.
+              </p>
+            </div>
+          </div>
+        </noscript>
+
         <Outlet />
         <ScrollRestoration />
         <Scripts />

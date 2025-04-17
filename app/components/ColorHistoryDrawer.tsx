@@ -23,14 +23,19 @@ export function ColorHistoryDrawer({
   const handleDownloadCSV = () => {
     const csvContent = convertColorHistoryToCSV(colorHistory);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
 
     link.setAttribute("href", url);
     link.setAttribute("download", "color-history.csv");
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+
+    // Clean up to avoid memory leaks
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   return (
@@ -66,6 +71,14 @@ export function ColorHistoryDrawer({
                 key={`${color.hex.clean}-${index}`}
                 className="flex items-center gap-4 p-2 rounded-lg hover:bg-accent cursor-pointer transition-colors"
                 onClick={() => onColorSelect(color)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    onColorSelect(color);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`Select color ${color.name.value}`}
               >
                 <div
                   className="w-12 h-12 rounded-md"
