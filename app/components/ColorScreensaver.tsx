@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import {
@@ -11,6 +11,9 @@ import {
   Eye,
   EyeOff,
   Info,
+  Palette,
+  PenTool,
+  X,
 } from "lucide-react";
 import { SlidingCounter } from "./SlidingCounter";
 import { ColorInformation } from "./ColorInformation";
@@ -41,6 +44,16 @@ export default function ColorScreensaver() {
   const [error, setError] = useState<string | null>(null);
   const [accessibilityMode, setAccessibilityMode] = useState(false);
   const [showColorInfo, setShowColorInfo] = useState(false);
+  const [patternType, setPatternType] = useState<string>("stripes");
+  const [showPatternOptions, setShowPatternOptions] = useState(false);
+  const [showCustomColorInput, setShowCustomColorInput] = useState(false);
+  const [customHexInput, setCustomHexInput] = useState("#FFFFFF");
+  const [customRgbInput, setCustomRgbInput] = useState({
+    r: 255,
+    g: 255,
+    b: 255,
+  });
+  const hexInputRef = useRef<HTMLInputElement>(null);
 
   const fetchRandomColor = useCallback(async () => {
     const r = Math.floor(Math.random() * 255);
@@ -247,6 +260,15 @@ export default function ColorScreensaver() {
     setAccessibilityMode((prev) => !prev);
   };
 
+  const togglePatternOptions = () => {
+    setShowPatternOptions((prev) => !prev);
+  };
+
+  const selectPattern = (pattern: string) => {
+    setPatternType(pattern);
+    setShowPatternOptions(false);
+  };
+
   const getAccessibleBackground = (color: ColorResponse) => {
     if (!accessibilityMode) return color.hex.value;
 
@@ -257,18 +279,147 @@ export default function ColorScreensaver() {
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     const isLight = luminance > 0.5;
 
-    // Add a pattern or adjust the color based on the luminance
-    if (isLight) {
-      // For lighter colors, darken them slightly for better contrast
-      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(0,0,0,0.15) 25%, rgba(0,0,0,0.15) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(0,0,0,0.15) 75%, rgba(0,0,0,0.15))`;
-    } else {
-      // For darker colors (with white text), use a darker pattern for better contrast with white text
-      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(0,0,0,0.4) 25%, rgba(0,0,0,0.4) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(0,0,0,0.4) 75%, rgba(0,0,0,0.4))`;
+    // Base contrast values for light and dark backgrounds
+    const lightContrast = isLight ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.4)";
+    const darkContrast = isLight ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.5)";
+
+    // Return different patterns based on the selected pattern type
+    switch (patternType) {
+      case "stripes":
+        return `linear-gradient(45deg, ${color.hex.value} 25%, ${lightContrast} 25%, ${lightContrast} 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, ${lightContrast} 75%, ${lightContrast})`;
+      case "dots":
+        return `radial-gradient(circle, ${color.hex.value} 25%, ${lightContrast} 25%)`;
+      case "circles":
+        return `repeating-radial-gradient(circle at 0 0, ${color.hex.value}, ${color.hex.value} 10px, ${lightContrast} 10px, ${lightContrast} 20px)`;
+      case "zigzag":
+        return `linear-gradient(135deg, ${lightContrast} 25%, transparent 25%) 0 0, linear-gradient(225deg, ${lightContrast} 25%, transparent 25%) 0 0, linear-gradient(315deg, ${lightContrast} 25%, transparent 25%) 0 0, linear-gradient(45deg, ${lightContrast} 25%, ${color.hex.value} 25%) 0 0 ${color.hex.value}`;
+      case "waves":
+        return `linear-gradient(to right, ${color.hex.value}, ${lightContrast}, ${color.hex.value}, ${lightContrast}, ${color.hex.value})`;
+      case "checkerboard":
+        return `repeating-conic-gradient(${color.hex.value} 0% 25%, ${lightContrast} 0% 50%) 50% / 20px 20px`;
+      case "triangles":
+        return `linear-gradient(60deg, ${color.hex.value} 25%, transparent 25.5%, transparent 75%, ${color.hex.value} 75%, ${color.hex.value}), linear-gradient(120deg, ${color.hex.value} 25%, ${lightContrast} 25.5%, ${lightContrast} 75%, ${color.hex.value} 75%, ${color.hex.value})`;
+      case "hexagons":
+        return `linear-gradient(30deg, ${lightContrast} 12%, transparent 12.5%, transparent 87%, ${lightContrast} 87.5%, ${lightContrast}), linear-gradient(150deg, ${lightContrast} 12%, transparent 12.5%, transparent 87%, ${lightContrast} 87.5%, ${lightContrast}), linear-gradient(30deg, ${lightContrast} 12%, transparent 12.5%, transparent 87%, ${lightContrast} 87.5%, ${lightContrast}), linear-gradient(150deg, ${lightContrast} 12%, transparent 12.5%, transparent 87%, ${lightContrast} 87.5%, ${lightContrast}), linear-gradient(60deg, ${darkContrast} 25%, transparent 25.5%, transparent 75%, ${darkContrast} 75%, ${darkContrast}), linear-gradient(60deg, ${darkContrast} 25%, transparent 25.5%, transparent 75%, ${darkContrast} 75%, ${darkContrast}) ${color.hex.value}`;
+      default:
+        return `linear-gradient(45deg, ${color.hex.value} 25%, ${lightContrast} 25%, ${lightContrast} 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, ${lightContrast} 75%, ${lightContrast})`;
     }
   };
 
   const toggleColorInfo = () => {
     setShowColorInfo((prev) => !prev);
+  };
+
+  const toggleCustomColorInput = () => {
+    if (!showCustomColorInput && color) {
+      // Initialize inputs with current color when opening
+      setCustomHexInput(color.hex.value);
+      setCustomRgbInput({
+        r: color.rgb.r,
+        g: color.rgb.g,
+        b: color.rgb.b,
+      });
+    }
+    setShowCustomColorInput((prev) => !prev);
+
+    // Focus the hex input when opening
+    if (!showCustomColorInput) {
+      setTimeout(() => {
+        if (hexInputRef.current) {
+          hexInputRef.current.focus();
+        }
+      }, 100);
+    }
+  };
+
+  const handleHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomHexInput(value);
+
+    // Convert valid hex to RGB
+    if (/^#[0-9A-F]{6}$/i.test(value)) {
+      const r = parseInt(value.slice(1, 3), 16);
+      const g = parseInt(value.slice(3, 5), 16);
+      const b = parseInt(value.slice(5, 7), 16);
+      setCustomRgbInput({ r, g, b });
+    }
+  };
+
+  const handleRgbInputChange = (component: "r" | "g" | "b", value: number) => {
+    const newRgb = { ...customRgbInput, [component]: value };
+    setCustomRgbInput(newRgb);
+
+    // Convert RGB to hex
+    const hexValue = `#${newRgb.r.toString(16).padStart(2, "0")}${newRgb.g
+      .toString(16)
+      .padStart(2, "0")}${newRgb.b.toString(16).padStart(2, "0")}`;
+    setCustomHexInput(hexValue.toUpperCase());
+  };
+
+  const applyCustomColor = async () => {
+    try {
+      // Verify hex is valid
+      if (!/^#[0-9A-F]{6}$/i.test(customHexInput)) {
+        throw new Error("Invalid hex color");
+      }
+
+      // Verify RGB values are valid
+      if (
+        customRgbInput.r < 0 ||
+        customRgbInput.r > 255 ||
+        customRgbInput.g < 0 ||
+        customRgbInput.g > 255 ||
+        customRgbInput.b < 0 ||
+        customRgbInput.b > 255
+      ) {
+        throw new Error("RGB values must be between 0 and 255");
+      }
+
+      // Fetch color information from API
+      const response = await fetch(
+        `https://www.thecolorapi.com/id?hex=${customHexInput.replace("#", "")}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Add HSL values to the color
+      const enhancedColor = addHslToColor(data);
+
+      // Set as current color
+      setColor(enhancedColor);
+      setNextBgColor(enhancedColor.hex.value);
+
+      // Add to color history
+      setColorHistory((prev) => {
+        const newHistory = [enhancedColor, ...prev];
+        return newHistory.slice(0, 20);
+      });
+
+      // Close the color input panel
+      setShowCustomColorInput(false);
+
+      // Pause automatic color changes
+      setIsPlaying(false);
+    } catch (error) {
+      console.error("Error applying custom color:", error);
+      setError("Failed to apply custom color. Please check your input.");
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleColorPickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomHexInput(value);
+
+    // Convert hex to RGB
+    const r = parseInt(value.slice(1, 3), 16);
+    const g = parseInt(value.slice(3, 5), 16);
+    const b = parseInt(value.slice(5, 7), 16);
+    setCustomRgbInput({ r, g, b });
   };
 
   if (loading || !color) {
@@ -284,6 +435,16 @@ export default function ColorScreensaver() {
   const buttonColorClass = isLight
     ? "bg-gray-900 text-white hover:bg-gray-700"
     : "bg-white text-gray-900 hover:bg-gray-200";
+  const patterns = [
+    { id: "stripes", name: "Stripes" },
+    { id: "dots", name: "Dots" },
+    { id: "circles", name: "Circles" },
+    { id: "zigzag", name: "Zigzag" },
+    { id: "waves", name: "Waves" },
+    { id: "checkerboard", name: "Checkerboard" },
+    { id: "triangles", name: "Triangles" },
+    { id: "hexagons", name: "Hexagons" },
+  ];
 
   return (
     <main
@@ -294,6 +455,7 @@ export default function ColorScreensaver() {
             ? getAccessibleBackground(color)
             : nextBgColor,
         transition: "background-color 1s ease-in-out",
+        backgroundSize: "20px 20px",
       }}
     >
       {error && (
@@ -363,10 +525,173 @@ export default function ColorScreensaver() {
             </div>
           </div>
 
+          {/* Custom Color Input */}
+          {showCustomColorInput && (
+            <div className="mt-4 border-t border-current border-opacity-20 pt-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className={`text-sm font-medium ${textColorClass}`}>
+                  Custom Color
+                </h3>
+                <button
+                  onClick={toggleCustomColorInput}
+                  className={`p-1 rounded-full ${buttonColorClass} opacity-80 hover:opacity-100`}
+                  aria-label="Close custom color panel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Color Picker */}
+                <div className="flex justify-center mb-2">
+                  <input
+                    type="color"
+                    value={customHexInput}
+                    onChange={handleColorPickerChange}
+                    className="w-12 h-12 rounded cursor-pointer border-0"
+                    aria-label="Color picker"
+                  />
+                </div>
+
+                {/* Hex Input */}
+                <div className="flex items-center">
+                  <label
+                    htmlFor="hex-input"
+                    className={`text-xs font-medium ${textColorClass} w-12`}
+                  >
+                    HEX:
+                  </label>
+                  <input
+                    id="hex-input"
+                    ref={hexInputRef}
+                    type="text"
+                    value={customHexInput}
+                    onChange={handleHexInputChange}
+                    placeholder="#000000"
+                    className={`ml-2 flex-1 px-2 py-1 text-sm rounded border ${
+                      isLight
+                        ? "border-gray-300 bg-white text-gray-900"
+                        : "border-gray-700 bg-gray-800 text-white"
+                    }`}
+                    maxLength={7}
+                  />
+                </div>
+
+                {/* RGB Sliders */}
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <label
+                      htmlFor="r-slider"
+                      className={`text-xs font-medium ${textColorClass} w-12`}
+                    >
+                      R:
+                    </label>
+                    <input
+                      id="r-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value={customRgbInput.r}
+                      onChange={(e) =>
+                        handleRgbInputChange("r", parseInt(e.target.value))
+                      }
+                      className="flex-1 h-2 accent-red-600"
+                    />
+                    <span
+                      className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
+                    >
+                      {customRgbInput.r}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <label
+                      htmlFor="g-slider"
+                      className={`text-xs font-medium ${textColorClass} w-12`}
+                    >
+                      G:
+                    </label>
+                    <input
+                      id="g-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value={customRgbInput.g}
+                      onChange={(e) =>
+                        handleRgbInputChange("g", parseInt(e.target.value))
+                      }
+                      className="flex-1 h-2 accent-green-600"
+                    />
+                    <span
+                      className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
+                    >
+                      {customRgbInput.g}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <label
+                      htmlFor="b-slider"
+                      className={`text-xs font-medium ${textColorClass} w-12`}
+                    >
+                      B:
+                    </label>
+                    <input
+                      id="b-slider"
+                      type="range"
+                      min="0"
+                      max="255"
+                      value={customRgbInput.b}
+                      onChange={(e) =>
+                        handleRgbInputChange("b", parseInt(e.target.value))
+                      }
+                      className="flex-1 h-2 accent-blue-600"
+                    />
+                    <span
+                      className={`text-xs font-mono ml-2 w-8 text-right ${textColorClass}`}
+                    >
+                      {customRgbInput.b}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Apply Button */}
+                <Button
+                  onClick={applyCustomColor}
+                  className={`${buttonColorClass} w-full mt-2 text-xs py-1 h-8`}
+                >
+                  Apply Color
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Color Information Section */}
           {showColorInfo && (
             <div className="mt-4 border-t border-current border-opacity-20 pt-4">
               <ColorInformation color={color} textColorClass={textColorClass} />
+            </div>
+          )}
+
+          {/* Pattern Options Section */}
+          {showPatternOptions && accessibilityMode && (
+            <div className="mt-4 border-t border-current border-opacity-20 pt-4">
+              <h3 className={`text-sm font-medium mb-2 ${textColorClass}`}>
+                Pattern Options
+              </h3>
+              <div className="flex flex-wrap justify-center gap-2">
+                {patterns.map((pattern) => (
+                  <button
+                    key={pattern.id}
+                    onClick={() => selectPattern(pattern.id)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      patternType === pattern.id
+                        ? "ring-2 ring-offset-2 ring-current"
+                        : ""
+                    } ${buttonColorClass}`}
+                  >
+                    {pattern.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -423,6 +748,28 @@ export default function ColorScreensaver() {
                 <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               )}
               {accessibilityMode ? "Standard" : "A11y"}
+            </Button>
+            {accessibilityMode && (
+              <Button
+                onClick={togglePatternOptions}
+                className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
+                aria-label={
+                  showPatternOptions
+                    ? "Hide pattern options"
+                    : "Show pattern options"
+                }
+              >
+                <Palette className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                {showPatternOptions ? "Hide Patterns" : "Patterns"}
+              </Button>
+            )}
+            <Button
+              onClick={toggleCustomColorInput}
+              className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
+              aria-label="Custom color input"
+            >
+              <PenTool className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+              Custom
             </Button>
             <Button
               onClick={toggleColorInfo}
