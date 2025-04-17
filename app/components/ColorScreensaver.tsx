@@ -10,11 +10,25 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Info,
 } from "lucide-react";
 import { SlidingCounter } from "./SlidingCounter";
-import { loadRighteousFont, isLightColor, copyToClipboard } from "~/lib/utils";
+import { ColorInformation } from "./ColorInformation";
+import {
+  loadRighteousFont,
+  isLightColor,
+  copyToClipboard,
+  addHslToColor,
+} from "~/lib/utils";
 import { ColorHistoryDrawer } from "./ColorHistoryDrawer";
 import type { ColorResponse } from "~/lib/types";
+
+// Define interfaces for vendor prefixed fullscreen methods
+interface VendorFullscreenElement extends HTMLElement {
+  mozRequestFullScreen?: () => Promise<void>;
+  webkitRequestFullscreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+}
 
 export default function ColorScreensaver() {
   const [color, setColor] = useState<ColorResponse | null>(null);
@@ -26,6 +40,7 @@ export default function ColorScreensaver() {
   const [colorHistory, setColorHistory] = useState<ColorResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [accessibilityMode, setAccessibilityMode] = useState(false);
+  const [showColorInfo, setShowColorInfo] = useState(false);
 
   const fetchRandomColor = useCallback(async () => {
     const r = Math.floor(Math.random() * 255);
@@ -64,14 +79,16 @@ export default function ColorScreensaver() {
   const changeColor = useCallback(async () => {
     if (!nextColor || !isPlaying) return;
 
-    setColor(nextColor);
-    setNextBgColor(nextColor.hex.value);
+    // Add HSL values to the color before setting it
+    const enhancedColor = addHslToColor(nextColor);
+    setColor(enhancedColor);
+    setNextBgColor(enhancedColor.hex.value);
 
     const newNextColor = await fetchRandomColor();
     setNextColor(newNextColor);
 
     setColorHistory((prev) => {
-      const newHistory = [nextColor, ...prev];
+      const newHistory = [enhancedColor, ...prev];
       return newHistory.slice(0, 20);
     });
   }, [nextColor, fetchRandomColor, isPlaying]);
@@ -80,9 +97,11 @@ export default function ColorScreensaver() {
     const initializeColors = async () => {
       const initialColor = await fetchRandomColor();
       const initialNextColor = await fetchRandomColor();
-      setColor(initialColor);
+      // Add HSL values to the initial color
+      const enhancedInitialColor = addHslToColor(initialColor);
+      setColor(enhancedInitialColor);
       setNextColor(initialNextColor);
-      setNextBgColor(initialColor.hex.value);
+      setNextBgColor(enhancedInitialColor.hex.value);
       setLoading(false);
     };
 
@@ -116,14 +135,13 @@ export default function ColorScreensaver() {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      const docEl = document.documentElement;
+      const docEl = document.documentElement as VendorFullscreenElement;
 
-      // Using type assertions to avoid TypeScript errors for vendor prefixes
       const requestFullscreen =
         docEl.requestFullscreen ||
-        (docEl as any).mozRequestFullScreen ||
-        (docEl as any).webkitRequestFullscreen ||
-        (docEl as any).msRequestFullscreen;
+        docEl.mozRequestFullScreen ||
+        docEl.webkitRequestFullscreen ||
+        docEl.msRequestFullscreen;
 
       if (requestFullscreen) {
         requestFullscreen.call(docEl).catch((err) => {
@@ -237,15 +255,20 @@ export default function ColorScreensaver() {
 
     // Calculate perceptual luminance
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const isLight = luminance > 0.5;
 
     // Add a pattern or adjust the color based on the luminance
-    if (luminance > 0.5) {
+    if (isLight) {
       // For lighter colors, darken them slightly for better contrast
-      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.1) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(0,0,0,0.1) 75%, rgba(0,0,0,0.1))`;
+      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(0,0,0,0.15) 25%, rgba(0,0,0,0.15) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(0,0,0,0.15) 75%, rgba(0,0,0,0.15))`;
     } else {
-      // For darker colors, lighten them slightly for better contrast
-      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(255,255,255,0.2) 25%, rgba(255,255,255,0.2) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(255,255,255,0.2) 75%, rgba(255,255,255,0.2))`;
+      // For darker colors (with white text), use a darker pattern for better contrast with white text
+      return `linear-gradient(45deg, ${color.hex.value} 25%, rgba(0,0,0,0.4) 25%, rgba(0,0,0,0.4) 50%, ${color.hex.value} 50%, ${color.hex.value} 75%, rgba(0,0,0,0.4) 75%, rgba(0,0,0,0.4))`;
     }
+  };
+
+  const toggleColorInfo = () => {
+    setShowColorInfo((prev) => !prev);
   };
 
   if (loading || !color) {
@@ -339,6 +362,14 @@ export default function ColorScreensaver() {
               </p>
             </div>
           </div>
+
+          {/* Color Information Section */}
+          {showColorInfo && (
+            <div className="mt-4 border-t border-current border-opacity-20 pt-4">
+              <ColorInformation color={color} textColorClass={textColorClass} />
+            </div>
+          )}
+
           <div className="flex flex-wrap justify-center gap-2">
             <Button
               onClick={togglePlayPause}
@@ -392,6 +423,18 @@ export default function ColorScreensaver() {
                 <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               )}
               {accessibilityMode ? "Standard" : "A11y"}
+            </Button>
+            <Button
+              onClick={toggleColorInfo}
+              className={`${buttonColorClass} text-xs sm:text-sm h-8 sm:h-9`}
+              aria-label={
+                showColorInfo
+                  ? "Hide color information"
+                  : "Show color information"
+              }
+            >
+              <Info className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+              {showColorInfo ? "Hide Info" : "Info"}
             </Button>
             <ColorHistoryDrawer
               colorHistory={colorHistory}

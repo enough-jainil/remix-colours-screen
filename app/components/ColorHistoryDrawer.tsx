@@ -7,7 +7,7 @@ import {
 import { History, Download } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ColorResponse } from "~/lib/types";
-import { convertColorHistoryToCSV } from "~/lib/utils";
+import { convertColorHistoryToCSV, addHslToColor } from "~/lib/utils";
 
 interface ColorHistoryDrawerProps {
   colorHistory: ColorResponse[];
@@ -21,7 +21,10 @@ export function ColorHistoryDrawer({
   buttonColorClass,
 }: ColorHistoryDrawerProps) {
   const handleDownloadCSV = () => {
-    const csvContent = convertColorHistoryToCSV(colorHistory);
+    // Ensure all colors have HSL data for the CSV
+    const enhancedHistory = colorHistory.map((color) => addHslToColor(color));
+
+    const csvContent = convertColorHistoryToCSV(enhancedHistory);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -66,33 +69,49 @@ export function ColorHistoryDrawer({
             </Button>
           </div>
           <div className="grid gap-2">
-            {colorHistory.map((color, index) => (
-              <div
-                key={`${color.hex.clean}-${index}`}
-                className="flex items-center gap-4 p-2 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                onClick={() => onColorSelect(color)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    onColorSelect(color);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={`Select color ${color.name.value}`}
-              >
+            {colorHistory.map((color, index) => {
+              // Ensure color has HSL data
+              const enhancedColor = addHslToColor(color);
+
+              return (
                 <div
-                  className="w-12 h-12 rounded-md"
-                  style={{ backgroundColor: color.hex.value }}
-                />
-                <div className="flex flex-col">
-                  <span className="font-medium">{color.name.value}</span>
-                  <div className="flex flex-col text-sm text-muted-foreground">
-                    <span>{color.hex.value}</span>
-                    <span>{color.rgb.value}</span>
+                  key={`${enhancedColor.hex.clean}-${index}`}
+                  className="flex items-center gap-4 p-2 rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                  onClick={() => onColorSelect(enhancedColor)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      onColorSelect(enhancedColor);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Select color ${enhancedColor.name.value}`}
+                >
+                  <div
+                    className="w-12 h-12 rounded-md"
+                    style={{ backgroundColor: enhancedColor.hex.value }}
+                  />
+                  <div className="flex flex-col flex-1">
+                    <span className="font-medium">
+                      {enhancedColor.name.value}
+                    </span>
+                    <div className="flex flex-col text-sm text-muted-foreground">
+                      <span>{enhancedColor.hex.value}</span>
+                      <div className="flex gap-2">
+                        <span className="text-xs">
+                          {enhancedColor.rgb.value}
+                        </span>
+                        {enhancedColor.hsl && (
+                          <span className="text-xs">
+                            {enhancedColor.hsl.value}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </SheetContent>
