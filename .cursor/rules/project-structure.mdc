@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Remix Project Structure Guide
+
+This is a Remix application built with Vite.
+
+## Key Files & Directories
+
+*   **Application Code**: The core application logic resides in the [`app/`](mdc:app) directory. Routes are typically defined within `app/routes/`.
+*   **Public Assets**: Static assets like images and fonts are served from the [`public/`](mdc:public) directory.
+*   **Vite Configuration**: The build process is configured in [`vite.config.ts`](mdc:vite.config.ts).
+*   **Tailwind CSS**: Styling is managed using Tailwind CSS, configured in [`tailwind.config.ts`](mdc:tailwind.config.ts) and [`postcss.config.js`](mdc:postcss.config.js).
+*   **TypeScript**: TypeScript configuration is found in [`tsconfig.json`](mdc:tsconfig.json).
+*   **ESLint**: Code linting rules are defined in [`.eslintrc.cjs`](mdc:.eslintrc.cjs).
+*   **Dependencies**: Project dependencies are listed in [`package.json`](mdc:package.json).
